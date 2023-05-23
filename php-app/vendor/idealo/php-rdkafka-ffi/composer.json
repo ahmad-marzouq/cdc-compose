@@ -1,0 +1,92 @@
+{
+    "name": "idealo/php-rdkafka-ffi",
+    "description": "PHP Kafka client - binding librdkafka via FFI",
+    "keywords": [
+        "php",
+        "ffi",
+        "librdkafka",
+        "kafka",
+        "client"
+    ],
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "Dirk Adler",
+            "email": "dirk.adler@idealo.de"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "": "src/"
+        },
+        "files": [
+          "src/constants.php",
+          "src/functions.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "": "tests/",
+            "RdKafka\\FFIGen\\": "resources/ffigen"
+        }
+    },
+    "require": {
+        "php" : "^7.4 || ^8.0",
+        "ext-ffi": "*"
+    },
+    "suggest": {
+        "ext-zend opcache": "*",
+        "ext-pcntl": "*"
+    },
+    "conflict": {
+        "ext-rdkafka": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.4",
+        "ircmaxell/php-c-parser": "dev-master#fd8f5efefd0fcc6c5119d945694acaa3a6790ada",
+        "symplify/easy-coding-standard": "^10.0",
+        "klitsche/ffigen": "0.8.1",
+        "klitsche/dog": "^0.4",
+        "symfony/dom-crawler": "^5.1",
+        "symfony/css-selector": "^5.1",
+        "phpbench/phpbench": "^1.1",
+        "composer/semver": "^3.2"
+    },
+    "scripts": {
+        "benchmarks-init" : [
+            "@php examples/delete-topic.php -tbenchmark",
+            "@php examples/create-topic.php -tbenchmark -p3 -r1"
+        ],
+        "examples-init" : [
+            "@php examples/delete-topic.php -tplayground",
+            "@php examples/create-topic.php -tplayground -p3 -r1"
+        ],
+        "test-init" : [
+            "@php examples/delete-topic.php -ttest",
+            "@php examples/delete-topic.php -ttest_admin",
+            "@php examples/delete-topic.php -ttest_partitions",
+            "@php examples/create-topic.php -ttest -p1 -r1",
+            "@php examples/create-topic.php -ttest_admin -p1 -r1",
+            "@php examples/create-topic.php -ttest_partitions -p3 -r1"
+        ],
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-text --coverage-clover=clover.xml",
+        "test-extension-init" : [
+            "@php -n -dextension=ffi.so examples/delete-topic.php -ttest",
+            "@php -n -dextension=ffi.so examples/delete-topic.php -ttest_partitions",
+            "@php -n -dextension=ffi.so examples/create-topic.php -ttest -p1 -r1",
+            "@php -n -dextension=ffi.so examples/create-topic.php -ttest_partitions -p3 -r1"
+        ],
+        "test-extension": "@php -dextension=rdkafka.so resources/test-extension/vendor/bin/phpunit -c resources/test-extension/phpunit.xml",
+        "cs": "ecs check src tests examples resources/ffigen benchmarks --ansi",
+        "cs-fix": "ecs check src tests examples resources/ffigen benchmarks --ansi --fix",
+        "prepare-docs": [
+            "sed 's/docs\\/img/img/g' README.md | sed 's/LICENSE)/usage\\\/license.md)/g' | sed 's/CONTRIBUTING.md/contributing\\\/index.md/g' | sed 's/CHANGELOG.md/usage\\/changelog.md/g' > docs/index.md",
+            "sed 's/docs\\/contributing/./g' CONTRIBUTING.md > docs/contributing/index.md",
+            "cp CHANGELOG.md docs/usage/changelog.md",
+            "cp LICENSE docs/usage/license.md",
+            "php resources/docs/update-contributors.php",
+            "dog"
+        ]
+    }
+}

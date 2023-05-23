@@ -1,0 +1,75 @@
+name: Build Windows
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests-windows:
+    name: Tests
+    runs-on: windows-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        php:
+          - '8.0'
+          - '8.1'
+          - '8.2'
+        librdkafka:
+          - '2.0.2'
+    defaults:
+      run:
+        shell: bash
+    env:
+      PHP_VERSION: ${{ matrix.php }}
+      LIBRDKAFKA_VERSION: v${{ matrix.librdkafka }}
+      KAFKA_BROKERS: localhost:9092
+      COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install librdkafka & kafka
+        run: |
+          nuget install librdkafka.redist -Version ${{ matrix.librdkafka }}
+          choco install --no-progress wget nssm
+          wget -q -O kafka_2.13-3.3.2.tgz http://ftp.fau.de/apache/kafka/3.3.2/kafka_2.13-3.3.2.tgz
+          tar -xzf kafka_2.13-3.3.2.tgz
+          cp -pr kafka_2.13-3.3.2 /c/kafka
+          sed -i "s|broker.id=0|broker.id=111|g" /c/kafka/config/server.properties
+          nssm install zookeeper /c/kafka/bin/windows/zookeeper-server-start.bat /c/kafka/config/zookeeper.properties
+          nssm set zookeeper AppExit Default Exit
+          nssm install kafka /c/kafka/bin/windows/kafka-server-start.bat /c/kafka/config/server.properties
+          nssm set kafka AppExit Default Exit
+
+      - name: Start Kafka
+        run: |
+          nssm start zookeeper
+          nssm status zookeeper
+          nssm start kafka
+          nssm status kafka
+
+      - name: Install PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          extensions: ffi
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v2
+        with:
+          composer-options: "--prefer-dist --prefer-stable"
+
+      - name: Run tests
+        run: |
+          export PATH=$PWD/librdkafka.redist.${{ matrix.librdkafka }}/runtimes/win-x64/native:$PATH
+          composer test-init
+          vendor/bin/phpunit --verbose --debug;
+
+      - name: Stop kafka
+        run: |
+          nssm stop kafka
+          nssm stop zookeeper

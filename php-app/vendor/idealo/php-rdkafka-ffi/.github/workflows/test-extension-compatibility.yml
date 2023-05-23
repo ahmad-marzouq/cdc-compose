@@ -1,0 +1,115 @@
+name: Extension Compatibility
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-extension-compatibility:
+    name: Tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php:
+          - '8.1'
+        librdkafka:
+          - 'v1.9.2'
+        rdkafka:
+          - '6.x'
+    services:
+      zookeeper:
+        image: confluentinc/cp-zookeeper:7.3.1
+        ports:
+          - 2181:2181
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+      kafka:
+        image: confluentinc/cp-kafka:7.3.1
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_BROKER_ID: 111
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    env:
+      PHP_VERSION: ${{ matrix.php }}
+      LIBRDKAFKA_VERSION: ${{ matrix.librdkafka }}
+      RDKAFKA_VERSION: ${{ matrix.rdkafka }}
+      KAFKA_BROKERS: localhost:9092
+      COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Cache librdkafka ${{ matrix.librdkafka }} build
+        id: librdkafka-build-cache
+        uses: actions/cache@v3
+        with:
+          path: ~/build-cache/librdkafka
+          key: ${{ runner.os }}-librdkafka-${{ matrix.librdkafka }}
+
+      - name: Build librdkafka ${{ matrix.librdkafka }}
+        if: ${{ steps.librdkafka-build-cache.outputs.cache-hit != 'true' }}
+        run: |
+          git clone --branch "${{ matrix.librdkafka }}" -c advice.detachedHead=false --depth 1 https://github.com/confluentinc/librdkafka.git /tmp/librdkafka; \
+          cd /tmp/librdkafka
+          ./configure --install-deps
+          make
+          mkdir -p ~/build-cache/librdkafka
+          sudo make install DESTDIR=~/build-cache/librdkafka
+
+      - name: Install librdkafka ${{ matrix.librdkafka }}
+        run: |
+          sudo rsync -av ~/build-cache/librdkafka/ /
+          sudo ldconfig
+
+      - name: Install PHP ${{ matrix.php }} with rdkafka ${{ matrix.rdkafka }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          extensions: ffi
+          tools: phpize
+
+      - name: Cache php-rdkafka ${{ matrix.rdkafka }} build
+        id: php-rdkafka-build-cache
+        uses: actions/cache@v3
+        with:
+          path: ~/build-cache/php-rdkafka
+          key: ${{ runner.os }}-php-rdkafka-${{ matrix.rdkafka }}
+
+      - name: Build php-rdkafka ${{ matrix.rdkafka }}
+        if: ${{ steps.php-rdkafka-build-cache.outputs.cache-hit != 'true' }}
+        run: |
+          git clone --branch "${{ matrix.rdkafka }}" -c advice.detachedHead=false --depth 1 https://github.com/arnaud-lb/php-rdkafka.git /tmp/php-rdkafka; \
+          cd /tmp/php-rdkafka
+          phpize
+          ./configure
+          make
+          mkdir -p ~/build-cache/php-rdkafka
+          cp ./modules/rdkafka.so ~/build-cache/php-rdkafka/
+
+      - name: Install php-rdkafka ${{ matrix.rdkafka }}
+        run: |
+          echo "extension=$HOME/build-cache/php-rdkafka/rdkafka.so"|sudo tee /etc/php/${{ matrix.php }}/cli/conf.d/99-rdkafka.ini >/dev/null
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v2
+        with:
+          composer-options: "--prefer-dist --prefer-stable --no-interaction --ignore-platform-req=ext-rdkafka"
+
+      - name: Install dependencies for test-extension
+        run: |
+          composer update --prefer-dist --prefer-stable --no-interaction -d resources/test-extension
+
+      - name: Run tests
+        run: |
+          composer test-extension-init
+          composer test-extension

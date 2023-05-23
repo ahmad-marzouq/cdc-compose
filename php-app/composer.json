@@ -1,0 +1,9 @@
+{
+    "name": "ahamed/php-app",
+    "type": "project",
+    "require": {
+        "elasticsearch/elasticsearch": "7.x-dev",
+        "idealo/php-rdkafka-ffi": "dev-main"
+    },
+    "minimum-stability": "dev"
+}

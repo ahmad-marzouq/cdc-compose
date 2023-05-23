@@ -1,0 +1,126 @@
+version: '3'
+services:
+  mysql:
+    image: mysql:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=mysql
+      - MYSQL_DATABASE=test_db
+    volumes:
+      - ./mysql-config/my.cnf:/etc/mysql/my.cnf
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    ports:
+      - 3336:3306
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.1
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+      #- node.name=elasticsearch
+      #- cluster.name=elasticsearch
+      #- cluster.initial_master_nodes=127.0.0.1
+      #- xpack.security.http.ssl.enabled=false
+      #- pack.security.transport.ssl.enabled=false
+      - cluster.routing.allocation.disk.watermark.low="99%"
+      - cluster.routing.allocation.disk.watermark.high="100%"
+      - cluster.routing.allocation.disk.watermark.flood_stage="100%"
+    #volumes:
+      #- ./elasticsearch-data:/usr/share/elasticsearch/data
+      #- ./elasticsearch-logs:/usr/share/elasticsearch/logs
+    ports:
+      - 9200:9200
+
+  maxwell:
+    restart: on-failure
+    command: bin/maxwell --config config.properties --producer=kafka --kafka.bootstrap.servers=kafka:9092 --kafka_topic=maxwell
+    build:
+      context: ./maxwell-config
+      dockerfile: Dockerfile
+    depends_on:
+      - elasticsearch
+      - mysql
+      - kafka
+
+    #command: tail -f /dev/null
+    #image: zendesk/maxwell:latest
+    environment:
+      - MAXWELL_USER=root
+      - MAXWELL_PASSWORD=mysql
+      - MAXWELL_HOST=mysql
+      - MAXWELL_PORT=3306
+      - MAXWELL_DATABASE=test_db
+      - MAXWELL_LOGS_CONSOLE=true
+      - MAXWELL_CONFIG_FILE=config.properties
+    #volumes:
+    #  - ./maxwell-config:/maxwell/
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    environment:
+      #- KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      #- KAFKA_LISTENERS=PLAINTEXT://:9092
+      #- KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      #- KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      #- KAFKA_ADVERTISED_HOST_NAME=kafka
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - 9092:9092
+    depends_on:
+      - zookeeper
+  init-kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - kafka
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      # blocks until kafka is reachable
+      kafka-topics --bootstrap-server kafka:9092 --list
+
+      echo -e 'Creating kafka topics'
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic maxwell --replication-factor 1 --partitions 1
+      echo -e 'Successfully created the following topics:'
+      kafka-topics --bootstrap-server kafka:9092 --list
+      "
+
+  zookeeper:
+      image: confluentinc/cp-zookeeper:latest
+      environment:
+        - ZOOKEEPER_CLIENT_PORT=2181
+        - ZOOKEEPER_TICK_TIME= 2000
+      ports:
+        - 2181:2181
+  php:
+    restart: always
+    build:
+      context: ./php-app
+      dockerfile: Dockerfile
+    depends_on:
+      - mysql
+      - elasticsearch
+      - maxwell
+      - kafka
+    volumes:
+      - ./php-app:/app
+  elasticsearch-init:
+    #command: tail -f /dev/null
+    command: sh init.sh
+    build:
+      context: ./elasticsearch-init
+      dockerfile: Dockerfile
+    #command: [ "bash", "-c", "chmod +x /data/init.sh && /data/init.sh" ]
+    depends_on:
+      - elasticsearch
+    volumes:
+      - ./elasticsearch-init/data:/data/
+#volumes:
+  #mysql-data:
+  #elasticsearch-data:
+  #  driver: local
+  #elasticsearch-logs:
+  #maxwell-config:

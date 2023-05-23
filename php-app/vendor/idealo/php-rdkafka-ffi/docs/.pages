@@ -1,0 +1,6 @@
+nav:
+  - Getting Started: index.md
+  - usage
+  - api
+  - benchmarks.md
+  - contributing

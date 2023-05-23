@@ -1,0 +1,14 @@
+{
+    "autoload-dev": {
+        "psr-4": {
+            "": "../../tests/"
+        }
+    },
+    "require": {
+        "php" : "^8.0",
+        "ext-rdkafka": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9"
+    }
+}

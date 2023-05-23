@@ -1,0 +1,103 @@
+version: '3'
+
+networks:
+  php-rdkafka-ffi:
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.1
+    ports:
+      - 2181:2181
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - php-rdkafka-ffi
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.1
+    ports:
+      - 9092:9092
+    hostname: kafka
+    environment:
+      KAFKA_BROKER_ID: 111
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+    networks:
+      - php-rdkafka-ffi
+
+  php74:
+    build:
+      context: resources/docker/php74-librdkafka-ffi
+    image: php74-librdkafka-ffi:latest
+    volumes:
+      - .:/app
+    depends_on:
+      - kafka
+    networks:
+      - php-rdkafka-ffi
+
+  php74-153:
+    build:
+      context: resources/docker/php74-librdkafka-ffi
+      args:
+        LIBRDKAFKA_VERSION: v1.5.3
+    image: php74-librdkafka-ffi:1.5.3
+    volumes:
+      - .:/app
+    depends_on:
+      - kafka
+    networks:
+      - php-rdkafka-ffi
+
+  php80:
+    build:
+      context: resources/docker/php80-librdkafka-ffi
+    image: php80-librdkafka-ffi:latest
+    volumes:
+      - .:/app
+    depends_on:
+      - kafka
+    networks:
+      - php-rdkafka-ffi
+
+  php81:
+    build:
+      context: resources/docker/php81-librdkafka-ffi
+    image: php81-librdkafka-ffi:latest
+    volumes:
+      - .:/app
+    depends_on:
+      - kafka
+    networks:
+      - php-rdkafka-ffi
+
+  php82:
+    build:
+      context: resources/docker/php82-librdkafka-ffi
+    image: php82-librdkafka-ffi:latest
+    volumes:
+      - .:/app
+    depends_on:
+      - kafka
+    networks:
+      - php-rdkafka-ffi
+
+  mkdocs:
+    build:
+      context: resources/docker/mkdocs-material
+    image: mkdocs-material
+    volumes:
+      - .:/docs
+    networks:
+      - php-rdkafka-ffi
+    ports:
+      - 127.0.0.1:8000:8000
+    restart: on-failure

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="bootstrap.php"
+         colors="true"
+         verbose="true"
+         failOnWarning="true"
+         cacheResult="false">
+    <testsuites>
+        <testsuite name="RdKafka Extension Binding">
+            <directory suffix=".php">../../tests/</directory>
+        </testsuite>
+    </testsuites>
+
+    <groups>
+        <exclude>
+            <group>ffiOnly</group>
+        </exclude>
+    </groups>
+</phpunit>

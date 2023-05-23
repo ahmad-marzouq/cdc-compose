@@ -1,0 +1,127 @@
+---
+- name: 'Run php-rdkafka-ffi benchmarks'
+  hosts: all
+  gather_facts: true
+  vars_files:
+    - ../vars/{{ ansible_host }}.yml
+  tasks:
+    - name: 'Ensure latest php-rdkafka-ffi repo is checked out'
+      git:
+        repo: 'https://github.com/idealo/php-rdkafka-ffi.git'
+        dest: /srv/php-rdkafka-ffi
+        depth: 1
+        force: true
+
+#    # just for testing
+#    - name: 'Upload local Bench classes and config'
+#      copy:
+#        src: ./../../../benchmarks/
+#        dest: /srv/php-rdkafka-ffi/benchmarks/
+#        owner: appuser
+#        group: appuser
+#        mode: '0644'
+
+    - name: 'Ensure docker can read/write checked out repo'
+      file:
+        path: /srv/php-rdkafka-ffi
+        state: directory
+        recurse: yes
+        owner: appuser
+        group: appuser
+
+    - name: 'Ensure latest docker images are available'
+      shell:
+        chdir: /srv/php-rdkafka-ffi
+        cmd: |
+          docker-compose pull
+          docker-compose build --parallel php74 php80
+
+    - name: 'Ensure latest dependencies are installed'
+      shell:
+        chdir: /srv/php-rdkafka-ffi
+        cmd: |
+          docker-compose run --rm --no-deps php74 composer install --no-ansi
+          docker-compose run --rm --no-deps php74 composer install --no-ansi -d /app/resources/test-extension --ignore-platform-reqs
+
+    - name: 'Ensure phpbench cache is empty'
+      shell:
+        chdir: /srv/php-rdkafka-ffi
+        cmd: |
+          rm -fr .phpbench
+
+    - name: 'Run benchmarks'
+      loop:
+        - { service: 'php74', group: 'ffi', config: 'ffi' }
+        - { service: 'php80', group: 'ffi',config: 'ffi' }
+        - { service: 'php74', group: 'ext' , config: 'ext' }
+        - { service: 'php74', group: 'ffi', config: 'ffi_preload' }
+        - { service: 'php80', group: 'ffi', config: 'ffi_preload' }
+        - { service: 'php80', group: 'ffi' , config: 'ffi_preload_jit' }
+        - { service: 'php80', group: 'ext' , config: 'ext' }
+      shell:
+        chdir: /srv/php-rdkafka-ffi
+        cmd: |
+          docker-compose down -v
+          if [ $(docker ps -q) ]; then docker kill $(docker ps -q); fi;
+          docker-compose up -d kafka
+          docker-compose exec kafka cub kafka-ready -z zookeeper:2181 1 20
+          docker-compose run --rm {{ item.service }} composer benchmarks-init
+          sleep 2s
+          docker-compose run --rm {{ item.service }} vendor/bin/phpbench run benchmarks \
+            --config=/app/benchmarks/{{ item.config }}.json \
+            --report=default \
+            --store \
+            --tag={{ item.service }}_{{ item.config }} \
+            --group={{ item.group }} \
+            --progress=plain
+          docker-compose run --rm {{ item.service }} vendor/bin/phpbench show \
+            --output='extends:delimited, delimiter:";", file:benchmarks/reports/{{ item.service }}_{{ item.config }}-env.csv' \
+            --report=env \
+            {{ item.service }}_{{ item.config }}
+          docker-compose run --rm {{ item.service }} vendor/bin/phpbench show \
+            --output='extends:delimited, delimiter:";", file:benchmarks/reports/{{ item.service }}_{{ item.config }}.csv' \
+            --report=default \
+            {{ item.service }}_{{ item.config }}
+
+    - name: 'Ensure docker-compose is not running'
+      shell:
+        chdir: /srv/php-rdkafka-ffi
+        cmd: |
+          docker-compose down -v
+          if [ $(docker ps -q) ]; then docker kill $(docker ps -q); fi;
+
+    - name: 'Ensure summary report is generated'
+      shell:
+        chdir: /srv/php-rdkafka-ffi
+        cmd: |
+          docker-compose run --rm --no-deps php74 vendor/bin/phpbench report \
+                      --ref=php74_ffi \
+                      --ref=php74_ffi_preload \
+                      --ref=php80_ffi \
+                      --ref=php80_ffi_preload \
+                      --ref=php80_ffi_preload_jit \
+                      --ref=php74_ext \
+                      --ref=php80_ext \
+                      --report=summary \
+                      --config=benchmarks/report.json \
+                      --output='extends:delimited, delimiter:";", file:benchmarks/reports/summary.csv'
+
+    - name: 'Download reports'
+      loop:
+        - php74_ffi.csv
+        - php74_ffi-env.csv
+        - php74_ffi_preload.csv
+        - php74_ffi_preload-env.csv
+        - php80_ffi.csv
+        - php80_ffi-env.csv
+        - php80_ffi_preload.csv
+        - php80_ffi_preload-env.csv
+        - php80_ffi_preload_jit.csv
+        - php80_ffi_preload_jit-env.csv
+        - php74_ext.csv
+        - php74_ext-env.csv
+        - summary.csv
+      fetch:
+        src: /srv/php-rdkafka-ffi/benchmarks/reports/{{ item }}
+        dest: ./../../../benchmarks/reports/{{ item }}
+        flat: yes
