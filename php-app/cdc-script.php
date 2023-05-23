@@ -23,18 +23,18 @@ $topic = $rk->newTopic("maxwell");
 // are: RD_KAFKA_OFFSET_BEGINNING, RD_KAFKA_OFFSET_END, RD_KAFKA_OFFSET_STORED.
 $topic->consumeStart(0, RD_KAFKA_OFFSET_BEGINNING);
 
+echo 'Started CDC'.PHP_EOL;
 while (true) {
-    var_dump(time());
+    print_r(time());
     $message = $topic->consume(0, 120 * 1000);
 
-    var_dump($message);
+    var_dump('MESSAGE',$message);
 
     $messageStatus = $message->err ?? null;
-    if ($messageStatus) {
+    if (isset($messageStatus)) {
         switch ($message->err) {
             case RD_KAFKA_RESP_ERR_NO_ERROR:
                 $payload = json_decode($message->payload, true);
-                var_dump($payload);
                 $table = $payload['table'];
                 $data = $payload['data'];
                 $type = $payload['type'];
@@ -100,15 +100,15 @@ function updateElasticsearch($id, $data)
 
     try {
         $response = $client->update($params);
-        print_r($response);
+        var_dump('UPDATE',$response);
 
     } catch (\Elasticsearch\Common\Exceptions\BadRequest400Exception $e) {
-        print_r($e->getMessage());
+        var_dump('ERROR',$e->getMessage());
     } catch (Elasticsearch\Common\Exceptions\Missing404Exception $e) {
         $response = $client->index($params);
-        print_r($response);
+        var_dump('ERROR',$response);
     } catch (\Exception $exception) {
-        print_r($exception);
+        var_dump('ERROR',$exception);
     }
 }
 
@@ -122,5 +122,5 @@ function deleteFromElasticsearch($id)
     ];
 
     $response = $client->delete($params);
-    print_r($response);
+    var_dump($response);
 }
