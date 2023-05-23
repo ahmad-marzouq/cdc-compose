@@ -10,24 +10,15 @@ services:
       - ./mysql-init:/docker-entrypoint-initdb.d
     ports:
       - 3336:3306
-
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.7.1
     environment:
       - discovery.type=single-node
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
       - xpack.security.enabled=false
-      #- node.name=elasticsearch
-      #- cluster.name=elasticsearch
-      #- cluster.initial_master_nodes=127.0.0.1
-      #- xpack.security.http.ssl.enabled=false
-      #- pack.security.transport.ssl.enabled=false
       - cluster.routing.allocation.disk.watermark.low="99%"
       - cluster.routing.allocation.disk.watermark.high="100%"
       - cluster.routing.allocation.disk.watermark.flood_stage="100%"
-    #volumes:
-      #- ./elasticsearch-data:/usr/share/elasticsearch/data
-      #- ./elasticsearch-logs:/usr/share/elasticsearch/logs
     ports:
       - 9200:9200
 
@@ -41,9 +32,6 @@ services:
       - elasticsearch
       - mysql
       - kafka
-
-    #command: tail -f /dev/null
-    #image: zendesk/maxwell:latest
     environment:
       - MAXWELL_USER=root
       - MAXWELL_PASSWORD=mysql
@@ -52,16 +40,10 @@ services:
       - MAXWELL_DATABASE=test_db
       - MAXWELL_LOGS_CONSOLE=true
       - MAXWELL_CONFIG_FILE=config.properties
-    #volumes:
-    #  - ./maxwell-config:/maxwell/
+
   kafka:
     image: confluentinc/cp-kafka:latest
     environment:
-      #- KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      #- KAFKA_LISTENERS=PLAINTEXT://:9092
-      #- KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
-      #- KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      #- KAFKA_ADVERTISED_HOST_NAME=kafka
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
@@ -89,12 +71,12 @@ services:
       "
 
   zookeeper:
-      image: confluentinc/cp-zookeeper:latest
-      environment:
-        - ZOOKEEPER_CLIENT_PORT=2181
-        - ZOOKEEPER_TICK_TIME= 2000
-      ports:
-        - 2181:2181
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=2181
+      - ZOOKEEPER_TICK_TIME= 2000
+    ports:
+      - 2181:2181
   php:
     restart: always
     build:
@@ -108,19 +90,11 @@ services:
     volumes:
       - ./php-app:/app
   elasticsearch-init:
-    #command: tail -f /dev/null
     command: sh init.sh
     build:
       context: ./elasticsearch-init
       dockerfile: Dockerfile
-    #command: [ "bash", "-c", "chmod +x /data/init.sh && /data/init.sh" ]
     depends_on:
       - elasticsearch
     volumes:
       - ./elasticsearch-init/data:/data/
-#volumes:
-  #mysql-data:
-  #elasticsearch-data:
-  #  driver: local
-  #elasticsearch-logs:
-  #maxwell-config:
